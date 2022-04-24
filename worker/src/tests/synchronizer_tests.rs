@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{
-    batch, batch_digest, batches, committee_with_base_port, keys, listener, open_batch_store,
-    resolve_batch_digest, serialise_batch,
+    batch, batch_digest, batches, committee_with_base_port, keys, open_batch_store,
+    resolve_batch_digest, serialise_batch, WorkerToWorkerMockServer,
 };
 use crypto::ed25519::Ed25519PublicKey;
 use tokio::{sync::mpsc::channel, time::timeout};
@@ -41,14 +41,14 @@ async fn synchronize() {
     let missing = vec![batch_digest()];
     let message = WorkerMessage::BatchRequest(missing.clone(), name.clone());
     let serialized = bincode::serialize(&message).unwrap();
-    let handle = listener(address, Some(Bytes::from(serialized)));
+    let mut handle = WorkerToWorkerMockServer::spawn(address);
 
     // Send a sync request.
     let message = PrimaryWorkerMessage::Synchronize(missing, target);
     tx_message.send(message).await.unwrap();
 
     // Ensure the target receives the sync request.
-    assert!(handle.await.is_ok());
+    assert_eq!(handle.recv().await.unwrap().payload, serialized);
 }
 
 #[tokio::test]

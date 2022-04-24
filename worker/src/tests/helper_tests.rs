@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{
-    batch_digest, committee_with_base_port, keys, listener, serialized_batch, temp_dir,
+    batch_digest, committee_with_base_port, keys, serialized_batch, temp_dir,
+    WorkerToWorkerMockServer,
 };
 use store::rocks;
 use tokio::sync::mpsc::channel;
@@ -41,14 +42,14 @@ async fn worker_batch_reply() {
     // Spawn a listener to receive the batch reply.
     let address = committee.worker(&requestor, &id).unwrap().worker_to_worker;
     let expected = Bytes::from(serialized_batch());
-    let handle = listener(address, Some(expected));
+    let mut handle = WorkerToWorkerMockServer::spawn(address);
 
     // Send a batch request.
     let digests = vec![batch_digest()];
     tx_worker_request.send((digests, requestor)).await.unwrap();
 
     // Ensure the requestor received the batch (ie. it did not panic).
-    assert!(handle.await.is_ok());
+    assert_eq!(handle.recv().await.unwrap().payload, expected);
 }
 
 #[tokio::test]

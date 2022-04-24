@@ -3,23 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{worker::WorkerMessage, SerializedBatchMessage};
 use blake2::digest::Update;
-use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
 use crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-use futures::{sink::SinkExt as _, stream::StreamExt as _};
+use futures::Stream;
 use rand::{rngs::StdRng, SeedableRng as _};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, pin::Pin};
 use store::{rocks, Store};
-use tokio::{
-    net::TcpListener,
-    sync::mpsc::{channel, Receiver, Sender},
-    task::JoinHandle,
-};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tonic::Response;
 use types::{
     Batch, BatchDigest, BincodeEncodedPayload, Empty, Transaction, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub fn temp_dir() -> std::path::PathBuf {
@@ -154,25 +148,6 @@ pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> BatchDigest {
     }))
 }
 
-// Fixture
-pub fn listener(address: SocketAddr, expected: Option<Bytes>) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let listener = TcpListener::bind(&address).await.unwrap();
-        let (socket, _) = listener.accept().await.unwrap();
-        let transport = Framed::new(socket, LengthDelimitedCodec::new());
-        let (mut writer, mut reader) = transport.split();
-        match reader.next().await {
-            Some(Ok(received)) => {
-                writer.send(Bytes::from("Ack")).await.unwrap();
-                if let Some(expected) = expected {
-                    assert_eq!(received.freeze(), expected);
-                }
-            }
-            _ => panic!("Failed to receive network message"),
-        }
-    })
-}
-
 pub struct WorkerToPrimaryMockServer {
     sender: Sender<BincodeEncodedPayload>,
 }
@@ -197,6 +172,43 @@ impl WorkerToPrimary for WorkerToPrimaryMockServer {
     ) -> Result<tonic::Response<Empty>, tonic::Status> {
         self.sender.send(request.into_inner()).await.unwrap();
         Ok(Response::new(Empty {}))
+    }
+}
+
+pub struct WorkerToWorkerMockServer {
+    sender: Sender<BincodeEncodedPayload>,
+}
+
+impl WorkerToWorkerMockServer {
+    pub fn spawn(address: SocketAddr) -> Receiver<BincodeEncodedPayload> {
+        let (sender, receiver) = channel(1);
+        let mock = Self { sender };
+        let service = tonic::transport::Server::builder()
+            .add_service(WorkerToWorkerServer::new(mock))
+            .serve(address);
+        tokio::spawn(service);
+        receiver
+    }
+}
+
+#[tonic::async_trait]
+impl WorkerToWorker for WorkerToWorkerMockServer {
+    async fn send_message(
+        &self,
+        request: tonic::Request<BincodeEncodedPayload>,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
+        self.sender.send(request.into_inner()).await.unwrap();
+        Ok(Response::new(Empty {}))
+    }
+
+    type ClientBatchRequestStream =
+        Pin<Box<dyn Stream<Item = Result<BincodeEncodedPayload, tonic::Status>> + Send>>;
+
+    async fn client_batch_request(
+        &self,
+        _request: tonic::Request<BincodeEncodedPayload>,
+    ) -> Result<tonic::Response<Self::ClientBatchRequestStream>, tonic::Status> {
+        todo!()
     }
 }
 

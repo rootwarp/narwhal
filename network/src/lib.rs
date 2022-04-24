@@ -15,6 +15,7 @@ mod retry;
 mod simple_sender;
 
 mod primary;
+mod worker;
 
 #[cfg(test)]
 #[path = "tests/common.rs"]
@@ -26,8 +27,10 @@ pub use crate::{
     reliable_sender::{CancelHandler, ReliableSender},
     retry::RetryConfig,
     simple_sender::SimpleSender,
+    worker::WorkerNetwork,
 };
 
+#[derive(Debug)]
 #[must_use]
 pub struct CancelHandler2<T>(tokio::task::JoinHandle<T>);
 

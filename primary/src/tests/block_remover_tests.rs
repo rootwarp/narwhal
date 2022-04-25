@@ -15,20 +15,18 @@ use crypto::{
     traits::{Signer, VerifyingKey},
     Hash,
 };
-use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
-use network::SimpleSender;
+use futures::{future::try_join_all, stream::FuturesUnordered};
+use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
 use tokio::{
-    net::TcpListener,
     sync::mpsc::{channel, Sender},
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use types::{
     test_utils::{
         certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-        resolve_name_and_committee,
+        resolve_name_and_committee, PrimaryToWorkerMockServer,
     },
     BatchDigest,
 };
@@ -50,7 +48,7 @@ async fn test_successful_blocks_delete() {
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
-        SimpleSender::new(),
+        PrimaryToWorkerNetwork::default(),
         rx_commands,
         rx_delete_batches,
     );
@@ -193,7 +191,7 @@ async fn test_timeout() {
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
-        SimpleSender::new(),
+        PrimaryToWorkerNetwork::default(),
         rx_commands,
         rx_delete_batches,
     );
@@ -317,7 +315,7 @@ async fn test_unlocking_pending_requests() {
         certificate_store: certificate_store.clone(),
         header_store: header_store.clone(),
         payload_store: payload_store.clone(),
-        network: SimpleSender::new(),
+        worker_network: PrimaryToWorkerNetwork::default(),
         rx_commands,
         pending_removal_requests: HashMap::new(),
         map_tx_removal_results: HashMap::new(),
@@ -410,35 +408,25 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
     expected_batch_ids: Vec<BatchDigest>,
     tx_delete_batches: Sender<DeleteBatchResult>,
 ) -> JoinHandle<()> {
+    println!("[{}] Setting up server", &address);
+    let mut recv = PrimaryToWorkerMockServer::spawn(address);
     tokio::spawn(async move {
-        println!("[{}] Setting up server", &address);
+        let message = recv.recv().await.unwrap();
+        match deserialize(&message.payload) {
+            Ok(PrimaryWorkerMessage::<PublicKey>::DeleteBatches(ids)) => {
+                assert_eq!(
+                    ids.clone(),
+                    expected_batch_ids,
+                    "Expected batch ids not the same for [{}]",
+                    &address
+                );
 
-        let listener = TcpListener::bind(&address).await.unwrap();
-        let (socket, _) = listener.accept().await.unwrap();
-        let transport = Framed::new(socket, LengthDelimitedCodec::new());
-
-        let (_, mut reader) = transport.split();
-        match reader.next().await {
-            Some(Ok(received)) => {
-                let message = received.freeze();
-                match deserialize(&message) {
-                    Ok(PrimaryWorkerMessage::<PublicKey>::DeleteBatches(ids)) => {
-                        assert_eq!(
-                            ids.clone(),
-                            expected_batch_ids,
-                            "Expected batch ids not the same for [{}]",
-                            &address
-                        );
-
-                        tx_delete_batches
-                            .send(Ok(DeleteBatchMessage { ids }))
-                            .await
-                            .unwrap();
-                    }
-                    _ => panic!("Unexpected request received"),
-                };
+                tx_delete_batches
+                    .send(Ok(DeleteBatchMessage { ids }))
+                    .await
+                    .unwrap();
             }
-            _ => panic!("Failed to receive network message"),
-        }
+            _ => panic!("Unexpected request received"),
+        };
     })
 }

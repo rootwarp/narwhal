@@ -5,7 +5,7 @@ use super::*;
 use crate::{
     common::{
         batch_digest, committee_with_base_port, keys, listener, serialized_batch, temp_dir,
-        transaction,
+        transaction, WorkerToPrimaryMockServer,
     },
     worker::WorkerMessage,
 };
@@ -42,7 +42,7 @@ async fn handle_clients_transactions() {
     // Spawn a network listener to receive our batch's digest.
     let primary_address = committee.primary(&name).unwrap().worker_to_primary;
     let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(batch_digest(), id)).unwrap();
-    let handle = listener(primary_address, Some(Bytes::from(expected)));
+    let mut handle = WorkerToPrimaryMockServer::spawn(primary_address);
 
     // Spawn enough workers' listeners to acknowledge our batches.
     for (_, addresses) in committee.others_workers(&name, &id) {
@@ -57,7 +57,7 @@ async fn handle_clients_transactions() {
     network.send(address, Bytes::from(transaction())).await;
 
     // Ensure the primary received the batch's digest (ie. it did not panic).
-    assert!(handle.await.is_ok());
+    assert_eq!(handle.recv().await.unwrap().payload, expected);
 }
 
 #[tokio::test]

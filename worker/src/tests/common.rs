@@ -10,9 +10,17 @@ use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::net::SocketAddr;
 use store::{rocks, Store};
-use tokio::{net::TcpListener, task::JoinHandle};
+use tokio::{
+    net::TcpListener,
+    sync::mpsc::{channel, Receiver, Sender},
+    task::JoinHandle,
+};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use types::{Batch, BatchDigest, Transaction};
+use tonic::Response;
+use types::{
+    Batch, BatchDigest, BincodeEncodedPayload, Empty, Transaction, WorkerToPrimary,
+    WorkerToPrimaryServer,
+};
 
 pub fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -163,6 +171,33 @@ pub fn listener(address: SocketAddr, expected: Option<Bytes>) -> JoinHandle<()> 
             _ => panic!("Failed to receive network message"),
         }
     })
+}
+
+pub struct WorkerToPrimaryMockServer {
+    sender: Sender<BincodeEncodedPayload>,
+}
+
+impl WorkerToPrimaryMockServer {
+    pub fn spawn(address: SocketAddr) -> Receiver<BincodeEncodedPayload> {
+        let (sender, receiver) = channel(1);
+        let mock = Self { sender };
+        let service = tonic::transport::Server::builder()
+            .add_service(WorkerToPrimaryServer::new(mock))
+            .serve(address);
+        tokio::spawn(service);
+        receiver
+    }
+}
+
+#[tonic::async_trait]
+impl WorkerToPrimary for WorkerToPrimaryMockServer {
+    async fn send_message(
+        &self,
+        request: tonic::Request<BincodeEncodedPayload>,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
+        self.sender.send(request.into_inner()).await.unwrap();
+        Ok(Response::new(Empty {}))
+    }
 }
 
 pub fn open_batch_store() -> Store<BatchDigest, SerializedBatchMessage> {

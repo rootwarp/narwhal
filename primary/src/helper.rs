@@ -2,10 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::PrimaryMessage;
-use bytes::Bytes;
 use config::Committee;
 use crypto::traits::VerifyingKey;
-use network::SimpleSender;
+use network::{PrimaryNetwork};
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
@@ -20,7 +19,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// Input channel to receive certificates requests.
     rx_primaries: Receiver<(Vec<CertificateDigest>, PublicKey)>,
     /// A network sender to reply to the sync requests.
-    network: SimpleSender,
+    primary_network: PrimaryNetwork,
 }
 
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
@@ -34,7 +33,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 committee,
                 store,
                 rx_primaries,
-                network: SimpleSender::new(),
+                primary_network: PrimaryNetwork::default(),
             }
             .run()
             .await;
@@ -59,9 +58,10 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 match self.store.read(digest).await {
                     Ok(Some(certificate)) => {
                         // TODO: Remove this deserialization-serialization in the critical path.
-                        let bytes = bincode::serialize(&PrimaryMessage::Certificate(certificate))
-                            .expect("Failed to serialize our own certificate");
-                        self.network.send(address, Bytes::from(bytes)).await;
+                        let message = PrimaryMessage::Certificate(certificate);
+                        self.primary_network
+                            .unreliable_send(address, &message)
+                            .await;
                     }
                     Ok(None) => (),
                     Err(e) => error!("{e}"),

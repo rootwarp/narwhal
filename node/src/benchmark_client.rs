@@ -4,16 +4,16 @@
 use anyhow::{Context, Result};
 use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
-use futures::{future::join_all, sink::SinkExt as _};
+use futures::future::join_all;
 use rand::Rng;
 use std::net::SocketAddr;
 use tokio::{
     net::TcpStream,
     time::{interval, sleep, Duration, Instant},
 };
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{info, subscriber::set_global_default, warn};
 use tracing_subscriber::filter::EnvFilter;
+use types::{TransactionProto, TransactionsClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -108,7 +108,7 @@ impl Client {
         }
 
         // Connect to the mempool.
-        let stream = TcpStream::connect(self.target)
+        let mut client = TransactionsClient::connect(format!("http://{}", self.target))
             .await
             .context(format!("failed to connect to {}", self.target))?;
 
@@ -117,7 +117,6 @@ impl Client {
         let mut tx = BytesMut::with_capacity(self.size);
         let mut counter = 0;
         let mut r = rand::thread_rng().gen();
-        let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
         let interval = interval(Duration::from_millis(BURST_DURATION));
         tokio::pin!(interval);
 
@@ -143,7 +142,10 @@ impl Client {
 
                 tx.resize(self.size, 0u8);
                 let bytes = tx.split().freeze();
-                if let Err(e) = transport.send(bytes).await {
+                if let Err(e) = client
+                    .submit_transaction(TransactionProto { transaction: bytes })
+                    .await
+                {
                     warn!("Failed to send transaction: {e}");
                     break 'main;
                 }

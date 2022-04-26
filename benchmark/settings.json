@@ -1,22 +1,22 @@
 {
     "key": {
-        "name": "aws-sui",
-        "path": "/Users/username/.ssh/aws-sui.pem"
+        "name": "nalthis-rsa",
+        "path": "/Users/brandon/.ssh/id_rsa"
     },
     "port": 5000,
     "repo": {
         "name": "narwhal",
         "url": "https://github.com/mystenlabs/narwhal",
-        "branch": "main"
+        "branch": "bmwill/grpc-bench-2"
     },
     "instances": {
-        "type": "m5d.8xlarge",
+        "type": "m5d.4xlarge",
         "regions": [
-            "us-east-1",
+            "us-west-2",
+            "us-west-2",
             "eu-north-1",
             "ap-southeast-2",
-            "us-west-1",
-            "ap-northeast-1"
+            "ap-south-1"
         ]
     }
 }

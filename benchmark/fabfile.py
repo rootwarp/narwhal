@@ -94,14 +94,14 @@ def install(ctx):
 def remote(ctx, debug=False):
     ''' Run benchmarks on AWS '''
     bench_params = {
-        'faults': 3,
-        'nodes': [10],
+        'faults': 0,
+        'nodes': [8],
         'workers': 1,
         'collocate': True,
-        'rate': [10_000, 110_000],
+        'rate': [100_000],
         'tx_size': 512,
-        'duration': 300,
-        'runs': 2,
+        'duration': 60,
+        'runs': 1,
     }
     node_params = {
         'header_size': 1_000,  # bytes

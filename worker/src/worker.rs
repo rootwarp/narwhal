@@ -267,6 +267,22 @@ impl Transactions for TxReceiverHandler {
 
         Ok(Response::new(Empty {}))
     }
+
+    async fn submit_transaction_stream(
+        &self,
+        request: tonic::Request<tonic::Streaming<types::TransactionProto>>,
+    ) -> Result<tonic::Response<types::Empty>, tonic::Status> {
+        let mut transactions = request.into_inner();
+
+        while let Some(Ok(txn)) = transactions.next().await {
+            // Send the transaction to the batch maker.
+            self.tx_batch_maker
+                .send(txn.transaction.to_vec())
+                .await
+                .expect("Failed to send transaction");
+        }
+        Ok(Response::new(Empty {}))
+    }
 }
 
 /// Defines how the network receiver handles incoming workers messages.

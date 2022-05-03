@@ -175,6 +175,11 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         origin: PublicKey,
         batch_mode: bool,
     ) {
+        if digests.is_empty() {
+            warn!("Request with empty digests received - ignore request");
+            return;
+        }
+
         // get the requestor's address.
         let address = match self.committee.primary(&origin) {
             Ok(x) => x.primary_to_primary,
@@ -190,10 +195,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             Ok(certificates) => certificates,
             Err(err) => {
                 error!("Error while retrieving certificates: {err}");
-
-                // just return at this point since we have no way
-                // to communicate to the requestor an error.
-                return;
+                vec![]
             }
         };
 
@@ -206,10 +208,15 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         // has not been found, then no message will be sent.
         if batch_mode {
             let response: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> =
-                digests.into_iter().zip(certificates).collect();
+                if certificates.is_empty() {
+                    digests.into_iter().map(|c| (c, None)).collect()
+                } else {
+                    digests.into_iter().zip(certificates).collect()
+                };
 
             let message = PrimaryMessage::CertificatesBatchResponse {
                 certificates: response,
+                from: self.name.clone(),
             };
 
             self.primary_network

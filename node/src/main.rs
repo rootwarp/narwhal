@@ -25,8 +25,16 @@ use tokio::sync::mpsc::{channel, Receiver};
 use tracing::{info, subscriber::set_global_default};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(feature = "dhat-heap")]
+    #[allow(unused)]
+    let profiler = dhat::Profiler::new_heap();
+
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .about("A research implementation of Narwhal and Tusk.")

@@ -419,7 +419,7 @@ async fn process_certificates() {
     // The first messages are just letting us know about the round of the certificates
     for _i in 0..3 {
         let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 1, 0));
+        assert_eq!(received, (vec![], 0, 0));
     }
     // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();

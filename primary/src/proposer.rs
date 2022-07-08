@@ -274,13 +274,8 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                         Ordering::Greater => {
                             // We accept round bigger than our current round to jump ahead in case we were
                             // late (or just joined the network).
-                            if parents.is_empty() && round > self.round + 1 {
-                                    self.round = round - 1;
-                                    self.last_parents = vec![];
-                            } else {
-                                self.round = round;
-                                self.last_parents = parents;
-                            }
+                            self.round = round;
+                            self.last_parents = parents;
 
                         },
                         Ordering::Less => {

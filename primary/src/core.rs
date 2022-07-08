@@ -339,11 +339,12 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", certificate);
 
-        // Let the proposer know about a certificate at this round and epoch, though not about its 
+        // Let the proposer know about a certificate at this round and epoch, though not about its
         // parents (which we may not have yet). This allows the proposer not to fire at rounds below
         // one, such as the current one, that has captured a super-majority of signers.
+        let latest_round_with_parents = std::cmp::max(certificate.round() - 1, 0);
         self.tx_proposer
-            .send((vec![], certificate.round(), certificate.epoch()))
+            .send((vec![], latest_round_with_parents, certificate.epoch()))
             .await
             .map_err(|_| DagError::ShuttingDown)?;
 

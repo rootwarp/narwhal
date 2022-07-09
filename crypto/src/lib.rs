@@ -26,6 +26,10 @@ use traits::{Authenticator, KeyPair};
 #[path = "tests/ed25519_tests.rs"]
 pub mod ed25519_tests;
 
+#[cfg(test)]
+#[path = "tests/ecdsa_tests.rs"]
+pub mod ecdsa_tests;
+
 #[cfg(all(test, feature = "celo"))]
 #[path = "tests/bls12377_tests.rs"]
 pub mod bls12377_tests;
@@ -39,6 +43,8 @@ pub mod bls12381_tests;
 pub mod bls12381;
 
 pub mod ed25519;
+pub mod ecdsa;
+
 pub mod traits;
 
 pub type CryptoError = ed25519_dalek::ed25519::Error;

@@ -16,6 +16,7 @@ zeroize = "1.5.6"
 signature = "1.5.0"
 tokio = { version = "1.19.2", features = ["sync", "rt", "macros"] }
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
+rust_secp256k1 = { version = "0.23.3", package = "secp256k1", features = ["rand-std"] }
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved

@@ -10,7 +10,6 @@ use crate::{
 
 use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signature, Signer, Verifier};
-use rsu::rand::rngs::OsRng;
 
 
 pub fn keys() -> Vec<EcdsaKeyPair> {

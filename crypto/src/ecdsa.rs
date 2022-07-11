@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use base64ct::{Base64, Encoding};
-use rust_secp256k1::{self, Message, Secp256k1};
+use secp256k1::{self, Message, Secp256k1};
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
 use std::fmt::{Display, self};
@@ -11,14 +11,14 @@ use crate::traits::{
 use serde_bytes::ByteBuf as SerdeByteBuf;
 use serde::de::Error as SerdeError;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct EcdsaPublicKey(pub rust_secp256k1::PublicKey);
+pub struct EcdsaPublicKey(pub secp256k1::PublicKey);
 
 
 #[derive(Debug)]
-pub struct EcdsaPrivateKey(pub rust_secp256k1::SecretKey);
+pub struct EcdsaPrivateKey(pub secp256k1::SecretKey);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EcdsaSignature(pub rust_secp256k1::ecdsa::Signature);
+pub struct EcdsaSignature(pub secp256k1::ecdsa::Signature);
 
 impl VerifyingKey for EcdsaPublicKey {
     type PrivKey = EcdsaPrivateKey;
@@ -28,7 +28,7 @@ impl VerifyingKey for EcdsaPublicKey {
 
 impl Verifier<EcdsaSignature> for EcdsaPublicKey {
     fn verify(&self, msg: &[u8], signature: &EcdsaSignature) -> Result<(), signature::Error> {
-        let s = rust_secp256k1::Secp256k1::new();
+        let s = secp256k1::Secp256k1::new();
         let message = Message::from_slice(msg).expect("32 bytes");
         s.verify_ecdsa(&message, &signature.0, &self.0).map_err(|_e| signature::Error::new())
     }
@@ -36,7 +36,7 @@ impl Verifier<EcdsaSignature> for EcdsaPublicKey {
 
 impl ToFromBytes for EcdsaPublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let pubkey = rust_secp256k1::PublicKey::from_slice(bytes).map_err(|_e| signature::Error::new())?;
+        let pubkey = secp256k1::PublicKey::from_slice(bytes).map_err(|_e| signature::Error::new())?;
         Ok(EcdsaPublicKey(pubkey))
     }
     fn as_bytes(&self) -> &[u8] {
@@ -105,7 +105,7 @@ impl SigningKey for EcdsaPrivateKey {
 
 impl ToFromBytes for EcdsaPrivateKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        rust_secp256k1::SecretKey::from_slice(bytes).map(EcdsaPrivateKey).map_err(|_e| signature::Error::new())
+        secp256k1::SecretKey::from_slice(bytes).map(EcdsaPrivateKey).map_err(|_e| signature::Error::new())
     }
 }
 
@@ -173,7 +173,7 @@ impl AsRef<[u8]> for EcdsaPrivateKey {
 
 impl Signature for EcdsaSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        rust_secp256k1::ecdsa::Signature::from_der(bytes).map(EcdsaSignature).map_err(|_e| signature::Error::new())
+        secp256k1::ecdsa::Signature::from_der(bytes).map(EcdsaSignature).map_err(|_e| signature::Error::new())
     }
 }
 
@@ -192,7 +192,7 @@ impl Display for EcdsaSignature {
 // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
 impl Default for EcdsaSignature {
     fn default() -> Self {
-        let sig = rust_secp256k1::ecdsa::Signature::from_der(&[0u8; 64]).unwrap();
+        let sig = secp256k1::ecdsa::Signature::from_der(&[0u8; 64]).unwrap();
         EcdsaSignature(sig)
     }
 }
@@ -228,21 +228,24 @@ impl KeyPair for EcdsaKeyPair {
     }
 }
 
-impl From<rust_secp256k1::KeyPair> for EcdsaKeyPair {
-    fn from(kp: rust_secp256k1::KeyPair) -> Self {
+impl From<secp256k1::KeyPair> for EcdsaKeyPair {
+    fn from(kp: secp256k1::KeyPair) -> Self {
         EcdsaKeyPair {
-            name: EcdsaPublicKey(kp.public_key()),
-            secret: EcdsaPrivateKey(kp.secret_key()),
+            name: EcdsaPublicKey(secp256k1::PublicKey::from_keypair(&kp)),
+            secret: EcdsaPrivateKey(secp256k1::SecretKey::from_keypair(&kp)),
+
+            // name: EcdsaPublicKey(kp.public_key()),
+            // secret: EcdsaPrivateKey(kp.secret_key()),
         }
     }
 }
 
 impl Signer<EcdsaSignature> for EcdsaKeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<EcdsaSignature, signature::Error> {
-        let privkey: &rust_secp256k1::SecretKey = &self.secret.0;
-        let pubkey: &rust_secp256k1::PublicKey = &self.name.0;
+        let privkey: &secp256k1::SecretKey = &self.secret.0;
+        let pubkey: &secp256k1::PublicKey = &self.name.0;
         let message = Message::from_slice(msg).expect("32 bytes");
-        let secp = rust_secp256k1::Secp256k1::new();
+        let secp = secp256k1::Secp256k1::new();
         Ok(EcdsaSignature(secp.sign_ecdsa(&message, privkey)))
     }
 }

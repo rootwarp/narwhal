@@ -73,8 +73,12 @@ impl Default for WorkerNetworkMetrics {
 }
 
 pub struct Metrics<N: NetworkMetrics> {
+    /// The handler to report the metrics.
     metrics_handler: Arc<N>,
+    /// A tag used for every reported metric to trace the module where this has been used from
     module_tag: String,
+    /// The network type - this shouldn't be set outside of this crate but is meant to
+    /// be initialised from the network modules.
     network_type: String,
 }
 

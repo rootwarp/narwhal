@@ -5,6 +5,7 @@ use bincode::Options;
 use config::WorkerId;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
 use itertools::Itertools;
+use network::PrimaryNetwork;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
@@ -40,6 +41,7 @@ async fn test_process_certificates_stream_mode() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
+        PrimaryNetwork::default(),
     );
 
     // AND some mock certificates
@@ -114,6 +116,7 @@ async fn test_process_certificates_batch_mode() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
+        PrimaryNetwork::default(),
     );
 
     // AND some mock certificates
@@ -209,6 +212,7 @@ async fn test_process_payload_availability_success() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
+        PrimaryNetwork::default(),
     );
 
     // AND some mock certificates
@@ -324,6 +328,7 @@ async fn test_process_payload_availability_when_failures() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
+        PrimaryNetwork::default(),
     );
 
     // AND some mock certificates

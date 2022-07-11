@@ -45,6 +45,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_message: Receiver<Batch>,
         tx_batch: Sender<Vec<u8>>,
+        network: WorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -54,7 +55,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
                 rx_reconfigure,
                 rx_message,
                 tx_batch,
-                network: WorkerNetwork::default(),
+                network,
             }
             .run()
             .await;

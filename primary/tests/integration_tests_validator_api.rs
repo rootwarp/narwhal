@@ -8,6 +8,7 @@ use crypto::{
     traits::KeyPair,
     Hash,
 };
+use network::metrics::WorkerNetworkMetrics;
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
 use prometheus::{default_registry, Registry};
@@ -125,8 +126,10 @@ async fn test_get_collections() {
         default_registry(),
     );
 
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.
@@ -326,8 +329,10 @@ async fn test_remove_collections() {
         "Certificate should still exist"
     );
 
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.
@@ -854,8 +859,10 @@ async fn test_get_collections_with_missing_certificates() {
         default_registry(),
     );
 
+    let registry_1 = Registry::new();
     let metrics_1 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry_1)),
+        network_metrics: Some(WorkerNetworkMetrics::new(&registry_1)),
     };
 
     // Spawn a `Worker` instance for primary 1.
@@ -889,8 +896,10 @@ async fn test_get_collections_with_missing_certificates() {
         default_registry(),
     );
 
+    let registry_2 = Registry::new();
     let metrics_2 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry_2)),
+        network_metrics: Some(WorkerNetworkMetrics::new(&registry_2)),
     };
 
     // Spawn a `Worker` instance for primary 2.

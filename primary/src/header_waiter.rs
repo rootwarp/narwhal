@@ -107,6 +107,8 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
         rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
         tx_core: Sender<Header<PublicKey>>,
         metrics: Arc<PrimaryMetrics>,
+        primary_network: PrimaryNetwork,
+        worker_network: PrimaryToWorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -121,8 +123,8 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                 rx_reconfigure,
                 rx_synchronizer,
                 tx_core,
-                primary_network: Default::default(),
-                worker_network: Default::default(),
+                primary_network,
+                worker_network,
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
                 pending: HashMap::new(),

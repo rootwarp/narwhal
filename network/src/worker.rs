@@ -1,14 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY};
+use crate::{
+    metrics::{Metrics, WorkerNetworkMetrics},
+    BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY,
+};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
-use tokio::runtime::Handle;
-use tokio::task::JoinHandle;
+use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
 use types::{BincodeEncodedPayload, WorkerMessage, WorkerToWorkerClient};
 
@@ -19,6 +21,7 @@ pub struct WorkerNetwork {
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
     executor: BoundedExecutor,
+    metrics: Option<Metrics<WorkerNetworkMetrics>>,
 }
 
 impl Default for WorkerNetwork {
@@ -35,11 +38,19 @@ impl Default for WorkerNetwork {
             retry_config,
             rng: SmallRng::from_entropy(),
             executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            metrics: None,
         }
     }
 }
 
 impl WorkerNetwork {
+    pub fn new(metrics: Metrics<WorkerNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "worker".to_string())),
+            ..Default::default()
+        }
+    }
+
     fn client(&mut self, address: Multiaddr) -> WorkerToWorkerClient<Channel> {
         self.clients
             .entry(address.clone())
@@ -63,7 +74,11 @@ impl WorkerNetwork {
     ) -> CancelHandler<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.send_message(address, message).await
+        let handler = self.send_message(address, message).await;
+
+        self.update_metrics();
+
+        handler
     }
 
     async fn send_message(
@@ -102,6 +117,9 @@ impl WorkerNetwork {
             let handle = self.send_message(address, message.clone()).await;
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
     }
 
@@ -112,7 +130,11 @@ impl WorkerNetwork {
     ) -> JoinHandle<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.unreliable_send_message(address, message).await
+        let handler = self.unreliable_send_message(address, message).await;
+
+        self.update_metrics();
+
+        handler
     }
 
     pub async fn unreliable_send_message<T: Into<BincodeEncodedPayload>>(
@@ -149,6 +171,15 @@ impl WorkerNetwork {
             };
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            m.set_network_concurrent_tasks(self.executor.current_running() as i64);
+        }
     }
 }

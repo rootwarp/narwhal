@@ -57,6 +57,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_committee: watch::Receiver<Reconfigure<PublicKey>>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
+        primary_network: PrimaryNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let shutdown_token = Self {
@@ -66,7 +67,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 payload_store,
                 rx_committee,
                 rx_primaries,
-                primary_network: PrimaryNetwork::default(),
+                primary_network,
             }
             .run()
             .await;

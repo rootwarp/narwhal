@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::EndpointMetrics;
 use mysten_network::metrics::MetricsCallbackProvider;
+use network::{metrics, metrics::PrimaryNetworkMetrics};
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
@@ -14,12 +15,14 @@ pub(crate) struct Metrics {
     pub(crate) endpoint_metrics: Option<EndpointMetrics>,
     pub(crate) primary_endpoint_metrics: Option<PrimaryEndpointMetrics>,
     pub(crate) node_metrics: Option<PrimaryMetrics>,
+    pub(crate) network_metrics: Option<PrimaryNetworkMetrics>,
 }
 
 static mut METRICS: Metrics = Metrics {
     endpoint_metrics: None,
     primary_endpoint_metrics: None,
     node_metrics: None,
+    network_metrics: None,
 };
 static INIT: Once = Once::new();
 
@@ -38,10 +41,14 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
             // Essential/core metrics across the primary node
             let node_metrics = PrimaryMetrics::new(metrics_registry);
 
+            // Network metrics
+            let network_metrics = metrics::PrimaryNetworkMetrics::new(metrics_registry);
+
             METRICS = Metrics {
                 node_metrics: Some(node_metrics),
                 endpoint_metrics: Some(endpoint_metrics),
                 primary_endpoint_metrics: Some(primary_endpoint_metrics),
+                network_metrics: Some(network_metrics),
             }
         });
         METRICS.clone()

@@ -9,6 +9,7 @@
 )]
 
 mod bounded_executor;
+pub mod metrics;
 mod primary;
 mod retry;
 mod worker;

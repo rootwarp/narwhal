@@ -1,14 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY};
+use crate::{
+    metrics::{Metrics, PrimaryNetworkMetrics},
+    BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY,
+};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
-use tokio::runtime::Handle;
-use tokio::task::JoinHandle;
+use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
 use types::{
     BincodeEncodedPayload, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
@@ -22,6 +24,7 @@ pub struct PrimaryNetwork {
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
     executor: BoundedExecutor,
+    metrics: Option<Metrics<PrimaryNetworkMetrics>>,
 }
 
 impl Default for PrimaryNetwork {
@@ -38,11 +41,19 @@ impl Default for PrimaryNetwork {
             retry_config,
             rng: SmallRng::from_entropy(),
             executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            metrics: None,
         }
     }
 }
 
 impl PrimaryNetwork {
+    pub fn new(metrics: Metrics<PrimaryNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "primary".to_string())),
+            ..Default::default()
+        }
+    }
+
     fn client(&mut self, address: Multiaddr) -> PrimaryToPrimaryClient<Channel> {
         self.clients
             .entry(address.clone())
@@ -66,7 +77,11 @@ impl PrimaryNetwork {
     ) -> CancelHandler<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.send_message(address, message).await
+        let handler = self.send_message(address, message).await;
+
+        self.update_metrics();
+
+        handler
     }
 
     async fn send_message(
@@ -105,6 +120,9 @@ impl PrimaryNetwork {
             let handle = self.send_message(address, message.clone()).await;
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
     }
 
@@ -116,11 +134,16 @@ impl PrimaryNetwork {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         let mut client = self.client(address);
-        self.executor
+        let handler = self
+            .executor
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await
+            .await;
+
+        self.update_metrics();
+
+        handler
     }
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
@@ -145,6 +168,9 @@ impl PrimaryNetwork {
             };
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
     }
 
@@ -173,7 +199,16 @@ impl PrimaryNetwork {
             };
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            m.set_network_concurrent_tasks(self.executor.current_running() as i64);
+        }
     }
 }
 
@@ -181,6 +216,7 @@ pub struct PrimaryToWorkerNetwork {
     clients: HashMap<Multiaddr, PrimaryToWorkerClient<Channel>>,
     config: mysten_network::config::Config,
     executor: BoundedExecutor,
+    metrics: Option<Metrics<PrimaryNetworkMetrics>>,
 }
 
 impl Default for PrimaryToWorkerNetwork {
@@ -189,11 +225,19 @@ impl Default for PrimaryToWorkerNetwork {
             clients: Default::default(),
             config: Default::default(),
             executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            metrics: None,
         }
     }
 }
 
 impl PrimaryToWorkerNetwork {
+    pub fn new(metrics: Metrics<PrimaryNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "primary_to_worker".to_string())),
+            ..Default::default()
+        }
+    }
+
     fn client(&mut self, address: Multiaddr) -> PrimaryToWorkerClient<Channel> {
         self.clients
             .entry(address.clone())
@@ -218,11 +262,16 @@ impl PrimaryToWorkerNetwork {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         let mut client = self.client(address);
-        self.executor
+        let handler = self
+            .executor
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await
+            .await;
+
+        self.update_metrics();
+
+        handler
     }
 
     pub async fn broadcast<T: VerifyingKey>(
@@ -245,6 +294,15 @@ impl PrimaryToWorkerNetwork {
             };
             handlers.push(handle);
         }
+
+        self.update_metrics();
+
         handlers
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            m.set_network_concurrent_tasks(self.executor.current_running() as i64);
+        }
     }
 }

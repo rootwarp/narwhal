@@ -1939,6 +1939,7 @@ dependencies = [
  "futures",
  "multiaddr",
  "mysten-network",
+ "prometheus",
  "rand 0.7.3",
  "test_utils",
  "thiserror",

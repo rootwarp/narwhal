@@ -22,6 +22,7 @@ use tracing::info;
 pub struct BoundedExecutor {
     semaphore: Arc<Semaphore>,
     executor: Handle,
+    capacity: usize,
 }
 
 impl BoundedExecutor {
@@ -32,7 +33,13 @@ impl BoundedExecutor {
         Self {
             semaphore,
             executor,
+            capacity,
         }
+    }
+
+    /// Returns the currently running tasks.
+    pub fn current_running(&self) -> usize {
+        self.capacity - self.semaphore.available_permits()
     }
 
     /// Spawn a [`Future`] on the `BoundedExecutor`. This function is async and
@@ -109,6 +116,7 @@ mod test {
         let (tx2, rx2) = oneshot::channel();
 
         // executor has a free slot, spawn should succeed
+        assert_eq!(executor.current_running(), 0);
 
         let f1 = executor.try_spawn(rx1).unwrap();
 
@@ -116,6 +124,9 @@ mod test {
         // we attempted to spawn
 
         let rx2 = executor.try_spawn(rx2).unwrap_err();
+
+        // currently running tasks is updated
+        assert_eq!(executor.current_running(), 1);
 
         // complete f1 future, should open a free slot in executor
 
@@ -130,6 +141,9 @@ mod test {
 
         tx2.send(()).unwrap();
         block_on(f2).unwrap().unwrap();
+
+        //ensure current running goes back to zero
+        assert_eq!(executor.current_running(), 0);
     }
 
     fn yield_task() -> impl Future<Output = ()> {

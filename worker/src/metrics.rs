@@ -1,15 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use network::metrics::WorkerNetworkMetrics;
 use prometheus::{default_registry, register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use std::sync::Once;
 
 #[derive(Clone)]
 pub struct Metrics {
     pub worker_metrics: Option<WorkerMetrics>,
+    pub network_metrics: Option<WorkerNetworkMetrics>,
 }
 
 static mut METRICS: Metrics = Metrics {
     worker_metrics: None,
+    network_metrics: None,
 };
 static INIT: Once = Once::new();
 
@@ -22,8 +25,12 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
             // Essential/core metrics across the worker node
             let node_metrics = WorkerMetrics::new(metrics_registry);
 
+            // The network metrics
+            let network_metrics = WorkerNetworkMetrics::new(metrics_registry);
+
             METRICS = Metrics {
                 worker_metrics: Some(node_metrics),
+                network_metrics: Some(network_metrics),
             }
         });
         METRICS.clone()

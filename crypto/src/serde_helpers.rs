@@ -78,6 +78,6 @@ impl<'de> DeserializeAs<'de, ed25519_dalek::Signature> for Ed25519Signature {
         } else {
             Bytes::deserialize_as(deserializer)?
         };
-        ed25519_dalek::Signature::from_bytes(&bytes).map_err(to_custom_error::<'de, D, _>)
+        <ed25519_dalek::Signature as signature::Signature>::from_bytes(&bytes).map_err(to_custom_error::<'de, D, _>)
     }
 }
